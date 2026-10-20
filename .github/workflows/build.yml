@@ -23,6 +23,9 @@ jobs:
         with:
           gradle-version: "8.9"
 
+      - name: Clé de signature fixe (mises à jour sans désinstaller)
+        run: mkdir -p ~/.android && base64 -d keystore.b64 > ~/.android/debug.keystore
+
       - name: Compiler l'APK
         run: gradle assembleDebug --no-daemon
 
