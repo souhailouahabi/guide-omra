@@ -26,6 +26,29 @@ jobs:
       - name: Clé de signature fixe (mises à jour sans désinstaller)
         run: mkdir -p ~/.android && base64 -d keystore.b64 > ~/.android/debug.keystore
 
+      - name: Télécharger les photos (Wikimedia Commons, licences libres)
+        run: |
+          mkdir -p app/src/main/res/drawable-nodpi
+          dl() {
+            curl -fsSL --retry 3 --retry-delay 5 \
+              -A "MonOmraBuild/1.0 (https://github.com/souhailouahabi/guide-omra)" \
+              -o "app/src/main/res/drawable-nodpi/$1.jpg" \
+              "https://commons.wikimedia.org/wiki/Special:FilePath/$2?width=960"
+            file "app/src/main/res/drawable-nodpi/$1.jpg"
+          }
+          dl img_ihram "Ihram_for_umrah.JPG"
+          dl img_mosquee "Masjidul-HaramAerialView_%28cropped%29.jpg"
+          dl img_tawaf "Tawaf_of_the_Kaaba.jpg"
+          dl img_pierre "The_Blackstone.jpg"
+          dl img_yamani "Rukn_al-Yamani_01.jpg"
+          dl img_hijr "Hajr_Ismail%2C_Makkah.jpg"
+          dl img_maqam "Maqam_Ibrahim_2008.jpg"
+          dl img_zamzam "%D9%85%D8%A7%D8%A1_%D8%B2%D9%85%D8%B2%D9%85_%D9%85%D8%A8%D8%B1%D8%AF_%D9%84%D9%84%D8%B4%D8%B1%D8%A8_%D9%81%D9%8A_%D8%A7%D9%84%D9%85%D8%B3%D8%AC%D8%AF_%D8%A7%D9%84%D8%AD%D8%B1%D8%A7%D9%85_%D8%A8%D9%85%D9%83%D8%A9.jpg"
+          dl img_sai "Sa%27y_between_Safa_and_Marwa_01.jpg"
+          dl img_safa "ALSAFA_.Mecca.jpg"
+          dl img_marwa "Al-Marwah.JPG"
+          ls -la app/src/main/res/drawable-nodpi
+
       - name: Compiler l'APK
         run: gradle assembleDebug --no-daemon
 
