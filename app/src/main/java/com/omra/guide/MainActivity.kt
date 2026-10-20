@@ -2,10 +2,13 @@ package com.omra.guide
 
 import android.app.Activity
 import android.app.AlertDialog
+import android.content.ActivityNotFoundException
 import android.content.Context
+import android.content.Intent
 import android.graphics.Color
 import android.graphics.Typeface
 import android.graphics.drawable.GradientDrawable
+import android.net.Uri
 import android.os.Build
 import android.os.Bundle
 import android.os.VibrationEffect
@@ -13,8 +16,11 @@ import android.os.Vibrator
 import android.os.VibratorManager
 import android.view.Gravity
 import android.view.View
+import android.view.ViewGroup.LayoutParams as ViewGroupLp
 import android.view.WindowManager
 import android.widget.Button
+import android.widget.FrameLayout
+import android.widget.ImageView
 import android.widget.LinearLayout
 import android.widget.ProgressBar
 import android.widget.ScrollView
@@ -53,6 +59,27 @@ class MainActivity : Activity() {
         val duas: List<Dua>,
         val compteur: Int = 0 // 0 = aucun, 1 = Tawaf, 2 = Sa'i
     )
+
+    /** Un repère à reconnaître sur place, avec sa photo. */
+    private data class Repere(
+        val image: String,
+        val titreFr: String,
+        val titreAr: String,
+        val texteFr: String,
+        val texteAr: String
+    )
+
+    /** Un lieu à ouvrir dans Google Maps. */
+    private data class Lieu(
+        val nomFr: String,
+        val nomAr: String,
+        val requete: String,
+        val noteFr: String = "",
+        val noteAr: String = ""
+    )
+
+    /** Photo, auteur et licence (Wikimedia Commons) pour l'écran des crédits. */
+    private data class Credit(val image: String, val titre: String, val auteur: String, val licence: String)
 
     private val talbiya = Dua(
         "Talbiya", "التلبية",
@@ -326,6 +353,90 @@ class MainActivity : Activity() {
     )
 
     // ------------------------------------------------------------------
+    // Photos, repères et lieux de chaque étape (même ordre que `etapes`)
+    // ------------------------------------------------------------------
+    private val imagesEtapes = listOf(
+        "img_ihram", "", "img_mosquee", "img_tawaf", "img_maqam", "img_zamzam", "img_sai", ""
+    )
+
+    private val reperesEtapes: Map<Int, List<Repere>> = mapOf(
+        3 to listOf(
+            Repere(
+                "img_pierre", "La Pierre noire", "الحجر الأسود",
+                "Dans l'angle de la Kaaba, entourée d'un cadre argenté. Une lumière verte sur le mur de la mosquée indique la ligne de départ de chaque tour.",
+                "في ركن الكعبة، داخل إطار فضي. ويدل ضوء أخضر على جدار المسجد على خط بداية كل شوط."
+            ),
+            Repere(
+                "img_yamani", "Le coin yéménite", "الركن اليماني",
+                "Le coin qui précède la Pierre noire. On le touche de la main si c'est facile, sans l'embrasser ni faire de signe.",
+                "الركن الذي يسبق الحجر الأسود. يُستلم باليد إن تيسر، دون تقبيل ولا إشارة."
+            ),
+            Repere(
+                "img_hijr", "Le Hijr Ismâ'il", "حِجر إسماعيل",
+                "Le muret blanc en demi-cercle à côté de la Kaaba. Il fait partie de la Kaaba : tournez à l'extérieur, sinon le tour n'est pas valable.",
+                "الجدار الأبيض نصف الدائري بجوار الكعبة، وهو من الكعبة؛ فطُف من خارجه وإلا لم يصح الشوط."
+            )
+        ),
+        6 to listOf(
+            Repere(
+                "img_safa", "Le mont Safa", "جبل الصفا",
+                "Point de départ du Sa'i, au sud de la galerie. Le rocher est visible sous le dôme.",
+                "بداية السعي، في الطرف الجنوبي من المسعى، والصخرة ظاهرة تحت القبة."
+            ),
+            Repere(
+                "img_marwa", "Le mont Marwa", "جبل المروة",
+                "À l'autre extrémité de la galerie. Le 7ᵉ trajet se termine ici.",
+                "في الطرف الآخر من المسعى، وعنده ينتهي الشوط السابع."
+            )
+        )
+    )
+
+    private val lieuxEtapes: Map<Int, List<Lieu>> = mapOf(
+        0 to listOf(
+            Lieu(
+                "Miqat al-Juhfa (Rabigh)", "ميقات الجحفة (رابغ)", "Miqat Al Juhfah Mosque",
+                "Pour les voyageurs venant du Maroc, d'Égypte et du Cham. En avion, l'Ihram se prend en passant au-dessus.",
+                "لأهل المغرب ومصر والشام، ومن مرّ به. وفي الطائرة يُحرم عند محاذاته."
+            ),
+            Lieu("Dhul-Hulayfa (Abyar Ali)", "ذو الحليفة (أبيار علي)", "Dhul Hulaifah Miqat Mosque Abyar Ali",
+                "Pour ceux qui viennent de Médine.", "لأهل المدينة ومن مرّ بها."),
+            Lieu("Qarn al-Manazil (As-Sayl al-Kabir)", "قرن المنازل (السيل الكبير)", "Qarn Al Manazil Miqat Mosque",
+                "Pour ceux qui viennent de Riyad, de Taïf et du Najd.", "لأهل نجد والطائف."),
+            Lieu("Yalamlam", "يلملم", "Yalamlam Miqat Mosque",
+                "Pour ceux qui viennent du Yémen et du sud.", "لأهل اليمن ومن جاء من الجنوب."),
+            Lieu("Dhat Irq", "ذات عرق", "Dhat Irq Miqat",
+                "Pour ceux qui viennent d'Irak et du nord-est.", "لأهل العراق."),
+            Lieu("Masjid Aïcha (at-Tan'im)", "مسجد عائشة (التنعيم)", "Masjid Aisha Tan'eem Mecca",
+                "Pour ceux qui sont déjà à La Mecque.", "لمن كان داخل مكة.")
+        ),
+        2 to listOf(
+            Lieu("Masjid al-Haram", "المسجد الحرام", "Masjid al-Haram Mecca"),
+            Lieu("Porte du Roi Abdelaziz", "باب الملك عبد العزيز", "King Abdulaziz Gate Masjid al-Haram")
+        ),
+        6 to listOf(
+            Lieu("Mont Safa", "جبل الصفا", "Mount Safa Mecca"),
+            Lieu("Mont Marwa", "جبل المروة", "Al-Marwah Mecca")
+        ),
+        7 to listOf(
+            Lieu("Coiffeurs près de Marwa", "حلاقون قرب المروة", "barber near Al Marwah Mecca")
+        )
+    )
+
+    private val credits = listOf(
+        Credit("img_mosquee", "Masjid al-Haram", "Wurzelgnohm", "CC0"),
+        Credit("img_ihram", "Ihram for umrah", "Rammaum", "CC BY-SA 3.0"),
+        Credit("img_tawaf", "Tawaf of the Kaaba", "omar_chatriwala", "CC BY 2.0"),
+        Credit("img_pierre", "The Blackstone", "Amerrycan Muslim", "CC BY-SA 3.0"),
+        Credit("img_yamani", "Rukn al-Yamani", "Mohammad Hossein Velayati", "CC BY 4.0"),
+        Credit("img_hijr", "Hajr Ismail, Makkah", "معتز توفيق اغبارية", "CC BY-SA 3.0"),
+        Credit("img_maqam", "Maqam Ibrahim", "Ibrahim.ID", "CC BY-SA 3.0"),
+        Credit("img_zamzam", "ماء زمزم في المسجد الحرام", "M sh شراونة محمد", "CC BY-SA 4.0"),
+        Credit("img_sai", "Sa'y between Safa and Marwa", "Mohammad Hossein Velayati", "CC BY 4.0"),
+        Credit("img_safa", "Al-Safa, Mecca", "Basamad a", "CC BY-SA 4.0"),
+        Credit("img_marwa", "Al-Marwah", "Aiman titi", "CC BY-SA 3.0")
+    )
+
+    // ------------------------------------------------------------------
     // Couleurs
     // ------------------------------------------------------------------
     private val cFond = Color.parseColor("#F7F3E8")
@@ -430,6 +541,115 @@ class MainActivity : Activity() {
 
     private fun estFaite(i: Int) = prefs.getBoolean("fait_$i", false)
 
+    private val MATCH = ViewGroupLp.MATCH_PARENT
+    private val WRAP = ViewGroupLp.WRAP_CONTENT
+
+    /** Identifiant d'une photo intégrée (0 si elle n'a pas pu être téléchargée à la compilation). */
+    private fun idImage(nom: String): Int =
+        if (nom.isEmpty()) 0 else resources.getIdentifier(nom, "drawable", packageName)
+
+    private fun photo(nom: String, rayon: Int = 14): ImageView? {
+        val id = idImage(nom)
+        if (id == 0) return null
+        return ImageView(this).apply {
+            setImageResource(id)
+            scaleType = ImageView.ScaleType.CENTER_CROP
+            background = fondArrondi(Color.parseColor("#DDD6C4"), rayon)
+            clipToOutline = true
+        }
+    }
+
+    /** Grande photo avec un dégradé sombre et un titre par-dessus. */
+    private fun banniere(nom: String, titre: String, sousTitre: String): FrameLayout {
+        val cadre = FrameLayout(this).apply {
+            background = fondArrondi(cVert, 20)
+            clipToOutline = true
+        }
+        val id = idImage(nom)
+        if (id != 0) {
+            cadre.addView(ImageView(this).apply {
+                setImageResource(id)
+                scaleType = ImageView.ScaleType.CENTER_CROP
+            }, FrameLayout.LayoutParams(MATCH, MATCH))
+            cadre.addView(View(this).apply {
+                background = GradientDrawable(
+                    GradientDrawable.Orientation.TOP_BOTTOM,
+                    intArrayOf(0x22000000, 0x33000000, 0xDD000000.toInt())
+                )
+            }, FrameLayout.LayoutParams(MATCH, MATCH))
+        }
+        val textes = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(dp(16), dp(12), dp(16), dp(16))
+        }
+        textes.addView(texte(titre, 26f, Color.WHITE, true))
+        if (sousTitre.isNotEmpty()) textes.addView(texte(sousTitre, 14f, Color.parseColor("#F1EEDF")))
+        cadre.addView(textes, FrameLayout.LayoutParams(MATCH, WRAP, Gravity.BOTTOM))
+        return cadre
+    }
+
+    private fun ouvrirMaps(requete: String) {
+        val uri = Uri.parse("https://www.google.com/maps/search/?api=1&query=" + Uri.encode(requete))
+        try {
+            startActivity(Intent(Intent.ACTION_VIEW, uri))
+        } catch (e: ActivityNotFoundException) {
+            AlertDialog.Builder(this)
+                .setMessage(t("Aucune application de cartes n'est installée.", "لا يوجد تطبيق خرائط على الهاتف."))
+                .setPositiveButton("OK", null)
+                .show()
+        }
+    }
+
+    private fun carteLieux(lieux: List<Lieu>): View {
+        val carte = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            background = fondArrondi(cCarte, 14, Color.parseColor("#E4DCC6"))
+            setPadding(dp(14), dp(12), dp(14), dp(12))
+        }
+        carte.addView(texte(t("📍 Lieux et itinéraires", "📍 الأماكن والخرائط"), 15f, cOr, true), lpLargeur(bas = 4))
+        lieux.forEach { l ->
+            val ligne = LinearLayout(this).apply {
+                orientation = LinearLayout.HORIZONTAL
+                gravity = Gravity.CENTER_VERTICAL
+                setPadding(0, dp(8), 0, dp(8))
+            }
+            val textes = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
+            textes.addView(texte(t(l.nomFr, l.nomAr), 16f, cTexte, true))
+            val note = t(l.noteFr, l.noteAr)
+            if (note.isNotEmpty()) textes.addView(texte(note, 13f, cGris))
+            ligne.addView(textes, LinearLayout.LayoutParams(0, WRAP, 1f))
+            ligne.addView(Button(this).apply {
+                text = t("Maps", "الخريطة")
+                textSize = 14f
+                isAllCaps = false
+                setTextColor(Color.WHITE)
+                background = fondArrondi(Color.parseColor("#1A73E8"), 12)
+                setPadding(dp(14), dp(6), dp(14), dp(6))
+                minHeight = 0
+                minimumHeight = 0
+                setOnClickListener { ouvrirMaps(l.requete) }
+            }, LinearLayout.LayoutParams(WRAP, WRAP).apply { marginStart = dp(10) })
+            carte.addView(ligne, lpLargeur())
+        }
+        return carte
+    }
+
+    private fun carteRepere(r: Repere): View {
+        val carte = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            background = fondArrondi(cCarte, 14, Color.parseColor("#E4DCC6"))
+            setPadding(dp(10), dp(10), dp(10), dp(12))
+        }
+        photo(r.image, 12)?.let { carte.addView(it, LinearLayout.LayoutParams(MATCH, dp(190))) }
+        carte.addView(texte(t(r.titreFr, r.titreAr), 17f, cVert, true).apply {
+            setPaddingRelative(dp(4), dp(8), dp(4), 0)
+        })
+        carte.addView(texte(t(r.texteFr, r.texteAr), 15f, cTexte).apply {
+            setPaddingRelative(dp(4), dp(2), dp(4), 0)
+        })
+        return carte
+    }
+
     // ------------------------------------------------------------------
     // Choix de la langue (premier lancement)
     // ------------------------------------------------------------------
@@ -453,39 +673,22 @@ class MainActivity : Activity() {
         window.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
         val (scroll, col) = nouvelleColonne()
 
-        // En-tête
-        val entete = LinearLayout(this).apply {
-            orientation = LinearLayout.VERTICAL
-            gravity = Gravity.CENTER_HORIZONTAL
-            background = fondArrondi(cVert, 20)
-            setPadding(dp(16), dp(14), dp(16), dp(20))
-        }
+        // En-tête : photo de la Mosquée al-Haram
+        val entete = banniere(
+            "img_mosquee",
+            "🕋  " + t("Mon Omra", "عمرتي"),
+            "لَبَّيْكَ اللَّهُمَّ عُمْرَةً\n" + t("Guide pas à pas · Invocations · Compteurs", "دليل خطوة بخطوة · أدعية · عدّادات")
+        )
         val langue = texte(t("العربية", "Français"), 15f, Color.WHITE, true).apply {
-            background = fondArrondi(Color.parseColor("#0E3B20"), 12)
+            background = fondArrondi(0xAA0E3B20.toInt(), 12)
             setPadding(dp(12), dp(6), dp(12), dp(6))
             isClickable = true
             setOnClickListener { changerLangue(if (ar) "fr" else "ar") }
         }
-        val ligneLangue = LinearLayout(this).apply {
-            orientation = LinearLayout.HORIZONTAL
-            gravity = Gravity.END
-            addView(langue)
-        }
-        entete.addView(ligneLangue, lpLargeur())
-        entete.addView(texte("🕋", 44f).apply { gravity = Gravity.CENTER }, lpLargeur())
-        entete.addView(texte(t("Mon Omra", "عمرتي"), 28f, Color.WHITE, true).apply { gravity = Gravity.CENTER }, lpLargeur())
-        entete.addView(texte("لَبَّيْكَ اللَّهُمَّ عُمْرَةً", 22f, Color.parseColor("#F3D57A")).apply {
-            gravity = Gravity.CENTER
-            textDirection = View.TEXT_DIRECTION_RTL
-        }, lpLargeur())
-        entete.addView(texte(
-            t("Guide pas à pas · Invocations · Compteurs", "دليل خطوة بخطوة · أدعية · عدّادات"),
-            14f, Color.parseColor("#D7E8DC")
-        ).apply {
-            gravity = Gravity.CENTER
-            setPadding(0, dp(6), 0, 0)
-        }, lpLargeur())
-        col.addView(entete, lpLargeur(bas = 14))
+        entete.addView(langue, FrameLayout.LayoutParams(WRAP, WRAP, Gravity.TOP or Gravity.END).apply {
+            topMargin = dp(12); marginEnd = dp(12)
+        })
+        col.addView(entete, LinearLayout.LayoutParams(MATCH, dp(240)).apply { bottomMargin = dp(14) })
 
         // Progression
         val nbFaites = etapes.indices.count { estFaite(it) }
@@ -509,16 +712,27 @@ class MainActivity : Activity() {
                 isClickable = true
                 setOnClickListener { afficherEtape(i) }
             }
-            val pastille = texte(if (fait) "✓" else "${i + 1}", 18f, Color.WHITE, true).apply {
-                gravity = Gravity.CENTER
-                background = fondArrondi(if (fait) cVertClair else cOr, 20)
+            // Vignette : photo de l'étape (ou emoji), avec le numéro en pastille
+            val vignette = FrameLayout(this)
+            val image = photo(imagesEtapes[i], 12)
+            if (image != null) {
+                vignette.addView(image, FrameLayout.LayoutParams(MATCH, MATCH))
+            } else {
+                vignette.addView(texte(e.emoji, 26f).apply {
+                    gravity = Gravity.CENTER
+                    background = fondArrondi(Color.parseColor("#EFE8D6"), 12)
+                }, FrameLayout.LayoutParams(MATCH, MATCH))
             }
-            ligne.addView(pastille, LinearLayout.LayoutParams(dp(40), dp(40)))
+            vignette.addView(texte(if (fait) "✓" else "${i + 1}", 12f, Color.WHITE, true).apply {
+                gravity = Gravity.CENTER
+                background = fondArrondi(if (fait) cVertClair else cOr, 12)
+            }, FrameLayout.LayoutParams(dp(24), dp(24), Gravity.BOTTOM or Gravity.END))
+            ligne.addView(vignette, LinearLayout.LayoutParams(dp(64), dp(64)))
             val textes = LinearLayout(this).apply {
                 orientation = LinearLayout.VERTICAL
                 setPaddingRelative(dp(12), 0, dp(4), 0)
             }
-            textes.addView(texte("${e.emoji}  ${t(e.titreFr, e.titreAr)}", 17f, cTexte, true))
+            textes.addView(texte(t(e.titreFr, e.titreAr), 17f, cTexte, true))
             textes.addView(texte(t(e.resumeFr, e.resumeAr), 14f, cGris))
             ligne.addView(textes, LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f))
             ligne.addView(texte(t("›", "‹"), 26f, cGris))
@@ -549,6 +763,45 @@ class MainActivity : Activity() {
             12f, cGris
         ).apply { gravity = Gravity.CENTER }, lpLargeur(haut = 16))
 
+        col.addView(texte(t("📷 Crédits photos", "📷 مصادر الصور"), 13f, cVertClair, true).apply {
+            gravity = Gravity.CENTER
+            setPadding(0, dp(8), 0, dp(8))
+            isClickable = true
+            setOnClickListener { afficherCredits() }
+        }, lpLargeur(haut = 4))
+
+        setContentView(scroll)
+    }
+
+    // ------------------------------------------------------------------
+    // Crédits des photos (licences Creative Commons)
+    // ------------------------------------------------------------------
+    private fun afficherCredits() {
+        ecranActuel = 100
+        val (scroll, col) = nouvelleColonne()
+        col.addView(texte(t("‹ Retour", "› رجوع"), 17f, cVert, true).apply {
+            setPadding(0, dp(6), 0, dp(6))
+            isClickable = true
+            setOnClickListener { afficherAccueil() }
+        }, lpLargeur(bas = 8))
+        col.addView(texte(t("Crédits photos", "مصادر الصور"), 24f, cVert, true), lpLargeur(bas = 4))
+        col.addView(texte(
+            t("Photos issues de Wikimedia Commons, utilisées selon leur licence.", "الصور من ويكيميديا كومنز، مستعملة وفق تراخيصها."),
+            14f, cGris
+        ), lpLargeur(bas = 12))
+        credits.forEach { c ->
+            val ligne = LinearLayout(this).apply {
+                orientation = LinearLayout.HORIZONTAL
+                gravity = Gravity.CENTER_VERTICAL
+                background = fondArrondi(cCarte, 12, Color.parseColor("#E4DCC6"))
+                setPadding(dp(10), dp(10), dp(10), dp(10))
+            }
+            photo(c.image, 10)?.let { ligne.addView(it, LinearLayout.LayoutParams(dp(56), dp(56))) }
+            ligne.addView(texte("${c.titre}\n${c.auteur} · ${c.licence}", 13f, cTexte).apply {
+                setPaddingRelative(dp(12), 0, 0, 0)
+            }, LinearLayout.LayoutParams(0, WRAP, 1f))
+            col.addView(ligne, lpLargeur(bas = 8))
+        }
         setContentView(scroll)
     }
 
@@ -577,7 +830,15 @@ class MainActivity : Activity() {
         barre.addView(texte(t("Étape ${i + 1} / ${etapes.size}", "الخطوة ${i + 1} من ${etapes.size}"), 14f, cGris))
         col.addView(barre, lpLargeur(bas = 8))
 
-        col.addView(texte("${e.emoji}  ${t(e.titreFr, e.titreAr)}", 26f, cVert, true), lpLargeur(bas = 12))
+        // Titre : grande photo si disponible, sinon simple titre
+        if (idImage(imagesEtapes[i]) != 0) {
+            col.addView(
+                banniere(imagesEtapes[i], "${e.emoji}  ${t(e.titreFr, e.titreAr)}", t(e.resumeFr, e.resumeAr)),
+                LinearLayout.LayoutParams(MATCH, dp(220)).apply { bottomMargin = dp(14) }
+            )
+        } else {
+            col.addView(texte("${e.emoji}  ${t(e.titreFr, e.titreAr)}", 26f, cVert, true), lpLargeur(bas = 12))
+        }
 
         // Consignes
         val consignes = LinearLayout(this).apply {
@@ -596,6 +857,15 @@ class MainActivity : Activity() {
             1 -> blocTawaf(col)
             2 -> blocSai(col)
         }
+
+        // Repères en photo
+        reperesEtapes[i]?.let { liste ->
+            col.addView(texte(t("Repères à reconnaître", "معالم تعرّف عليها"), 20f, cVert, true), lpLargeur(haut = 4, bas = 8))
+            liste.forEach { col.addView(carteRepere(it), lpLargeur(bas = 12)) }
+        }
+
+        // Lieux à ouvrir dans Maps
+        lieuxEtapes[i]?.let { col.addView(carteLieux(it), lpLargeur(bas = 14)) }
 
         // Invocations
         col.addView(texte(t("Invocations", "الأدعية والأذكار"), 20f, cVert, true), lpLargeur(haut = 4, bas = 8))
